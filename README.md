@@ -129,9 +129,13 @@ The bot scans these 20 large-cap U.S. stocks every trading day:
 
 ---
 
-## Live Status
+## Live Dashboard
 
-This bot is currently deployed and running on Railway's schedule. Since it only trades paper money and reports through Alpaca (not through this README), the real source of truth for open positions, trade history, and account value is the **[Alpaca paper trading dashboard](https://app.alpaca.markets/paper/dashboard/overview)** — not a number pasted here that could go stale.
+This bot is deployed and running 24/7 on Railway. Since visitors here don't have access to the private Alpaca account, live portfolio performance, per-stock signals, and the full trade history are all viewable on the public dashboard:
+
+**[Live Dashboard →](https://sean-dawes-quantitative-trading-system-dashboard-gbtllc.streamlit.app/)**
+
+It's built with Streamlit (`dashboard.py` in this repo) and reads directly from the same Alpaca account and trained model the bot itself uses — nothing on it is hardcoded or simulated.
 
 ---
 
