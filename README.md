@@ -1,8 +1,16 @@
-# Quantitative Trading System 🤖📈
+# Quantitative Trading System
 
 > A machine-learning trading bot that scans a 20-stock watchlist every weekday morning, predicts next-day price direction, and automatically places (paper) trades through a rule-based risk management layer — no human intervention required.
 
 **Note:** This project only trades with fake ("paper") money through Alpaca's practice trading platform. It's a learning and portfolio project, not real investment advice or a real trading track record.
+
+---
+
+## Live Dashboard
+
+**[Live Dashboard →](https://sean-dawes-quantitative-trading-system-dashboard-gbtllc.streamlit.app/)**
+
+View the bot's live equity, per-stock buy/sell calls, and full trade log through this public dashboard.
 
 ---
 
@@ -126,16 +134,6 @@ The bot scans these 20 large-cap U.S. stocks every trading day:
 - **APScheduler** — daily cron-style scheduling
 - **Railway** — 24/7 cloud hosting
 - **Git / GitHub** — version control
-
----
-
-## Live Dashboard
-
-**[Live Dashboard →](https://sean-dawes-quantitative-trading-system-dashboard-gbtllc.streamlit.app/)**
-
-View the bot's live equity, per-stock buy/sell calls, and full trade log through this public dashboard.
-
----
 
 ## Project Structure
 
