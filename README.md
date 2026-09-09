@@ -19,7 +19,7 @@ View the bot's live equity, per-stock buy/sell calls, and full trade log through
 Every weekday at 9:35 AM US/Eastern, hosted 24/7 on a cloud server, the bot:
 
 1. Pulls 2 years of daily price history for all 20 watchlist stocks
-2. Computes 15 technical indicator features for each one (RSI, MACD, Bollinger Bands, ATR, a 50-day trend measure, a stochastic oscillator, on-balance volume, and momentum/volume signals)
+2. Computes 10 technical indicator features for each one (RSI, MACD, Bollinger Bands, ATR, and momentum/volume signals)
 3. Feeds those features into a trained XGBoost model, which outputs a probability that the stock closes higher tomorrow
 4. Converts that probability into a BUY / SELL / HOLD signal
 5. Runs every BUY signal through a risk-management gate (volatility check, earnings blackout, news sentiment) before it's allowed to trade
@@ -39,7 +39,7 @@ SELL_PROB_THRESHOLD = 0.40   # model's odds of "up" below this → SELL / avoid
 PREDICTION_HORIZON_DAYS = 1  # predicting tomorrow's close vs. today's
 ```
 
-The model itself is a gradient-boosted decision tree classifier (XGBoost), trained on several years of pooled daily historical data across the watchlist, with hyperparameters chosen by a small validation-based search rather than one fixed guess:
+The model itself is a gradient-boosted decision tree classifier (XGBoost), trained on ~9,600 rows of historical data across the watchlist:
 
 ```python
 FEATURE_COLUMNS = [
@@ -47,15 +47,12 @@ FEATURE_COLUMNS = [
     "macd", "macd_signal", "macd_hist",
     "bb_pct", "bb_width",
     "atr_pct",
-    "returns_1d", "returns_5d", "returns_10d", "returns_20d",
+    "returns_1d", "returns_5d",
     "volume_change",
-    "price_vs_sma50",
-    "stoch_k",
-    "obv_change",
 ]
 ```
 
-Accuracy is evaluated on a per-ticker, time-ordered hold-out slice (each stock's own most recent data, never seen during training) — never better than a modest edge over a coin flip, which is exactly why the risk-management layer below matters more than the raw prediction itself.
+On its historical test set, the model correctly predicted next-day direction **52.4%** of the time — modestly better than a coin flip. That's exactly why the risk-management layer below matters more than the raw prediction itself.
 
 ---
 
