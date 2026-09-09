@@ -1,7 +1,12 @@
 """Thin wrapper around Alpaca's paper-trading API (alpaca-py SDK)."""
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import OrderSide, TimeInForce
-from alpaca.trading.requests import MarketOrderRequest, TakeProfitRequest, StopLossRequest
+from alpaca.trading.requests import (
+    MarketOrderRequest,
+    TakeProfitRequest,
+    StopLossRequest,
+    GetPortfolioHistoryRequest,
+)
 
 import config
 
@@ -30,6 +35,18 @@ class AlpacaBroker:
             return self.client.get_open_position(ticker)
         except Exception:
             return None
+
+    def get_all_positions(self):
+        """All currently open positions across the whole account (used by the dashboard)."""
+        try:
+            return self.client.get_all_positions()
+        except Exception:
+            return []
+
+    def get_portfolio_history(self, period: str = "1M", timeframe: str = "1D"):
+        """Historical account equity, straight from Alpaca -- used to draw the equity curve."""
+        request = GetPortfolioHistoryRequest(period=period, timeframe=timeframe)
+        return self.client.get_portfolio_history(request)
 
     def close_position(self, ticker: str):
         try:
