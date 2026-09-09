@@ -1,6 +1,8 @@
 """
 Technical indicator library used to build model features:
-RSI, MACD, Bollinger Bands, and ATR (for the volatility filter).
+RSI, MACD, Bollinger Bands, ATR (for the volatility filter), a 50-day
+trend measure, a stochastic oscillator, on-balance volume, and
+longer-horizon returns.
 All functions are pure pandas/numpy -- no external TA dependency.
 """
 import numpy as np
@@ -46,6 +48,24 @@ def compute_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return tr.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
 
 
+def compute_sma(close: pd.Series, period: int) -> pd.Series:
+    return close.rolling(period).mean()
+
+
+def compute_stochastic(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """%K: where today's close sits within the last `period` days' high/low range."""
+    low_min = df["low"].rolling(period).min()
+    high_max = df["high"].rolling(period).max()
+    denom = (high_max - low_min).replace(0, np.nan)
+    return (100 * (df["close"] - low_min) / denom).fillna(50)
+
+
+def compute_obv(df: pd.DataFrame) -> pd.Series:
+    """On-balance volume: running total of volume, added on up days, subtracted on down days."""
+    direction = np.sign(df["close"].diff()).fillna(0)
+    return (direction * df["volume"]).cumsum()
+
+
 def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
     """Return a copy of df with every indicator column added."""
     out = df.copy()
@@ -69,6 +89,19 @@ def add_all_indicators(df: pd.DataFrame) -> pd.DataFrame:
 
     out["returns_1d"] = out["close"].pct_change(1)
     out["returns_5d"] = out["close"].pct_change(5)
+    out["returns_10d"] = out["close"].pct_change(10)
+    out["returns_20d"] = out["close"].pct_change(20)
     out["volume_change"] = out["volume"].pct_change(1)
+
+    # Trend: how far price sits above/below its own 50-day average
+    out["sma_50"] = compute_sma(out["close"], 50)
+    out["price_vs_sma50"] = (out["close"] - out["sma_50"]) / out["sma_50"]
+
+    # Momentum: stochastic %K
+    out["stoch_k"] = compute_stochastic(out)
+
+    # Volume confirmation: is volume trending with or against the price move
+    obv = compute_obv(out)
+    out["obv_change"] = obv.pct_change(5).replace([np.inf, -np.inf], np.nan)
 
     return out

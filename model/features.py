@@ -6,8 +6,11 @@ FEATURE_COLUMNS = [
     "macd", "macd_signal", "macd_hist",
     "bb_pct", "bb_width",
     "atr_pct",
-    "returns_1d", "returns_5d",
+    "returns_1d", "returns_5d", "returns_10d", "returns_20d",
     "volume_change",
+    "price_vs_sma50",
+    "stoch_k",
+    "obv_change",
 ]
 
 

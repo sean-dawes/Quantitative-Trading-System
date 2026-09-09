@@ -17,7 +17,7 @@ PAPER_TRADING = True  # this project only ever trades paper, by design
 BUY_PROB_THRESHOLD = 0.60   # model P(up) above this -> BUY
 SELL_PROB_THRESHOLD = 0.40  # model P(up) below this -> SELL / avoid
 PREDICTION_HORIZON_DAYS = 1  # predict next-day direction
-LOOKBACK_PERIOD = "2y"       # historical data window used for training
+LOOKBACK_PERIOD = "5y"       # historical data window used for training
 DATA_INTERVAL = "1d"
 
 # --- Risk management ---
