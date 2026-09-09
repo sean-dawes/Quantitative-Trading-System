@@ -1,34 +1,90 @@
-# Algorithmic Trading Bot
+# Quantitative Trading System
 
-A daily algorithmic trading system that generates buy/sell signals on a
-20-stock watchlist using an XGBoost classifier trained on technical
-indicators (RSI, MACD, Bollinger Bands, ATR), then paper-trades those
-signals through Alpaca's API behind a rule-based risk management layer
-(confidence-weighted position sizing, stop-loss/take-profit brackets,
-a volatility filter, an earnings-date blackout, and headline sentiment
-gating).
+A trading bot that predicts short-term stock price movements and automatically
+places (paper) trades based on those predictions — built to combine a finance
+background with real coding and data skills.
 
-This project trades **paper money only**. It is for learning/portfolio
-purposes, not investment advice.
+**Note:** This project only trades with fake ("paper") money through Alpaca's
+practice trading platform. It's a learning and portfolio project, not real
+investment advice or a real trading track record.
 
-## How it works
+## What This Project Does
 
-1. `indicators/technical.py` computes RSI, MACD, Bollinger Bands, and ATR
-   from OHLCV price history (pulled via `yfinance`).
-2. `model/train.py` builds a labeled dataset across the whole watchlist
-   (label = did the stock close higher the next day?) and trains an
-   `XGBClassifier` on it.
-3. `model/predict.py` loads that model and turns today's indicators into a
-   probability of a next-day up move, then a BUY / SELL / HOLD signal.
-4. `risk/` filters out low-quality trades (too volatile, near an earnings
-   date, negative news sentiment) and sizes whatever's left based on model
-   confidence and a fixed % of account equity at risk.
-5. `execution/broker.py` and `execution/executor.py` send the surviving
-   trades to Alpaca as bracket orders (entry + stop-loss + take-profit).
-6. `run_bot.py` ties it all together for one run; `scheduler.py` runs it
-   automatically every weekday morning, for a 24/7-hosted deployment.
+Every weekday morning, this bot:
 
-## Setup
+1. Looks at 20 well-known stocks (Apple, Microsoft, Tesla, and others).
+2. Uses a machine learning model to predict whether each stock is more likely
+   to go up or down over the next day.
+3. Runs those predictions through a set of risk-management rules before
+   deciding whether to actually trade.
+4. Automatically places any resulting trades through a brokerage account —
+   with built-in stop-loss and take-profit orders — using fake money.
+5. Repeats this process every trading day, on its own, running 24/7 in the
+   cloud.
+
+## Why I Built This
+
+As a finance student on the CFA track, I wanted a hands-on way to combine
+what I'm learning about markets and risk management with real technical
+skills — data analysis, machine learning, and software deployment. This
+project let me build every piece of that pipeline myself, from the
+prediction model to the risk controls to the live deployment.
+
+## How It Works (In Plain English)
+
+**Step 1 — Reading the market.**
+The bot pulls two years of daily price history for each stock and
+calculates a handful of common "technical indicators" — measurements
+traders use to spot patterns in price and momentum (things like RSI,
+MACD, and Bollinger Bands).
+
+**Step 2 — Making a prediction.**
+Those indicators get fed into a machine learning model (specifically an
+XGBoost classifier), which was trained on historical data to recognize
+patterns that tend to come before a stock goes up or down. Each day, the
+model estimates a probability that a given stock will rise the next day.
+
+**Step 3 — Deciding whether it's actually worth trading.**
+A prediction alone isn't enough to trade on. Before any trade happens, it
+has to pass a series of risk checks:
+- Is this stock too quiet or too wildly volatile right now?
+- Is the company about to announce earnings (which can cause unpredictable
+  price swings)?
+- Is recent news about this stock too negative?
+
+Only trades that clear all of these checks move forward.
+
+**Step 4 — Sizing and placing the trade.**
+The bot decides how much money to put into a trade based on how confident
+the model's prediction was — more confidence, slightly larger position;
+less confidence, smaller position. Every trade automatically comes with a
+built-in stop-loss (to limit losses) and take-profit (to lock in gains).
+
+**Step 5 — Running automatically.**
+The entire process above repeats on its own every weekday morning, hosted
+on a cloud server so it runs continuously without needing a computer to be
+turned on.
+
+## Key Features
+
+| Feature | What it does |
+|---|---|
+| Machine learning predictions | Learns patterns from 2 years of historical price data instead of relying on fixed, hardcoded rules |
+| Technical indicators | RSI, MACD, Bollinger Bands, and ATR (volatility) — common tools traders use to read price charts |
+| Risk management | Position sizing, stop-loss/take-profit, volatility filtering, earnings blackout, news sentiment check |
+| Automated execution | Places trades automatically through Alpaca's paper trading API — no manual clicking required |
+| 24/7 cloud deployment | Runs on a schedule every trading day, hosted remotely rather than on a personal computer |
+
+## Tech Stack
+
+- **Python** — the language the entire project is built in
+- **XGBoost / scikit-learn** — the machine learning model
+- **Pandas / NumPy** — data processing
+- **Alpaca API** — brokerage connection for placing paper trades
+- **Railway** — cloud hosting for 24/7 automated execution
+- **Git / GitHub** — version control
+
+## Setup (For Anyone Who Wants to Run This)
 
 ```bash
 cd algo-trading-bot
@@ -47,56 +103,27 @@ cp .env.example .env
 
 ## Usage
 
-Train the model (run this first, and re-run periodically to refresh it):
+Train the prediction model (run this first):
 
 ```bash
 python train_model.py
 ```
 
-Run one trading pass by hand:
+Run one trading check by hand:
 
 ```bash
 python run_bot.py
 ```
 
-Run automatically every weekday morning (leave this running, e.g. in a
-`screen`/`tmux` session, on a small cloud VM, or as a systemd service):
+Run it automatically every weekday morning:
 
 ```bash
 python scheduler.py
 ```
 
-Run the indicator unit tests:
-
-```bash
-pytest tests/
-```
-
-## Project layout
-
-```
-config.py              thresholds, risk parameters, paths
-watchlist.py            the 20-stock universe
-data_pipeline/           price history + news headlines (yfinance)
-indicators/               RSI / MACD / Bollinger / ATR
-model/                     feature engineering, training, prediction
-risk/                       position sizing, volatility/earnings filters, sentiment gate
-execution/                   Alpaca broker wrapper + trade executor
-run_bot.py                    one full daily run
-scheduler.py                   cron-style scheduler for a 24/7 deployment
-train_model.py                  CLI to (re)train the model
-tests/                            unit tests for the indicators
-```
-
-## Tuning
-
-Everything that shapes risk and signal thresholds lives in `config.py`:
-buy/sell probability cutoffs, max position size, stop-loss/take-profit %,
-the ATR band used for the volatility filter, the earnings blackout window,
-and the minimum sentiment score to allow a BUY.
-
 ## Disclaimer
 
-This is an educational project. It trades Alpaca **paper** accounts only.
-Nothing here is financial advice, and past/simulated performance is not
-indicative of future results.
+This is an educational project built for learning and portfolio purposes.
+It only trades Alpaca **paper** (practice) accounts, never real money.
+Nothing in this project is financial advice, and past or simulated
+performance does not predict future results.
