@@ -14,6 +14,13 @@ time (15 features, fair per-ticker time split, tuned XGBoost):
 
 Run: python experiments/test_accuracy_ideas.py
 """
+import os
+import sys
+
+# Make sure the project root (one level up from experiments/) is importable,
+# regardless of what directory this script is run from.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report
