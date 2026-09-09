@@ -1,129 +1,180 @@
-# Quantitative Trading System
+# Quantitative Trading System 🤖📈
 
-A trading bot that predicts short-term stock price movements and automatically
-places (paper) trades based on those predictions — built to combine a finance
-background with real coding and data skills.
+> A machine-learning trading bot that scans a 20-stock watchlist every weekday morning, predicts next-day price direction, and automatically places (paper) trades through a rule-based risk management layer — no human intervention required.
 
-**Note:** This project only trades with fake ("paper") money through Alpaca's
-practice trading platform. It's a learning and portfolio project, not real
-investment advice or a real trading track record.
+**Note:** This project only trades with fake ("paper") money through Alpaca's practice trading platform. It's a learning and portfolio project, not real investment advice or a real trading track record.
 
-## What This Project Does
+---
 
-Every weekday morning, this bot:
+## What This Bot Does
 
-1. Looks at 20 well-known stocks (Apple, Microsoft, Tesla, and others).
-2. Uses a machine learning model to predict whether each stock is more likely
-   to go up or down over the next day.
-3. Runs those predictions through a set of risk-management rules before
-   deciding whether to actually trade.
-4. Automatically places any resulting trades through a brokerage account —
-   with built-in stop-loss and take-profit orders — using fake money.
-5. Repeats this process every trading day, on its own, running 24/7 in the
-   cloud.
+Every weekday at 9:35 AM US/Eastern, hosted 24/7 on a cloud server, the bot:
 
-## Why I Built This
+1. Pulls 2 years of daily price history for all 20 watchlist stocks
+2. Computes 10 technical indicator features for each one (RSI, MACD, Bollinger Bands, ATR, and momentum/volume signals)
+3. Feeds those features into a trained XGBoost model, which outputs a probability that the stock closes higher tomorrow
+4. Converts that probability into a BUY / SELL / HOLD signal
+5. Runs every BUY signal through a risk-management gate (volatility check, earnings blackout, news sentiment) before it's allowed to trade
+6. Sizes and places any surviving trades through Alpaca's API as bracket orders (entry + stop-loss + take-profit)
 
-As a finance student on the CFA track, I wanted a hands-on way to combine
-what I'm learning about markets and risk management with real technical
-skills — data analysis, machine learning, and software deployment. This
-project let me build every piece of that pipeline myself, from the
-prediction model to the risk controls to the live deployment.
+No manual clicking, no daily check-ins required — it runs, decides, and trades entirely on its own.
 
-## How It Works (In Plain English)
+---
 
-**Step 1 — Reading the market.**
-The bot pulls two years of daily price history for each stock and
-calculates a handful of common "technical indicators" — measurements
-traders use to spot patterns in price and momentum (things like RSI,
-MACD, and Bollinger Bands).
+## The Signal — How a Prediction Becomes a Trade
 
-**Step 2 — Making a prediction.**
-Those indicators get fed into a machine learning model (specifically an
-XGBoost classifier), which was trained on historical data to recognize
-patterns that tend to come before a stock goes up or down. Each day, the
-model estimates a probability that a given stock will rise the next day.
+**Plain English:** The model was trained on how these 20 stocks actually moved over the past two years. For each stock, it looks at where RSI, MACD, and a handful of other indicators sit *today*, and estimates the odds the stock closes higher tomorrow than it is right now. That's the "signal" — not a guess, but a probability learned from real price history.
 
-**Step 3 — Deciding whether it's actually worth trading.**
-A prediction alone isn't enough to trade on. Before any trade happens, it
-has to pass a series of risk checks:
-- Is this stock too quiet or too wildly volatile right now?
-- Is the company about to announce earnings (which can cause unpredictable
-  price swings)?
-- Is recent news about this stock too negative?
+```python
+BUY_PROB_THRESHOLD  = 0.60   # model's odds of "up" above this → BUY
+SELL_PROB_THRESHOLD = 0.40   # model's odds of "up" below this → SELL / avoid
+PREDICTION_HORIZON_DAYS = 1  # predicting tomorrow's close vs. today's
+```
 
-Only trades that clear all of these checks move forward.
+The model itself is a gradient-boosted decision tree classifier (XGBoost), trained on ~9,600 rows of historical data across the watchlist:
 
-**Step 4 — Sizing and placing the trade.**
-The bot decides how much money to put into a trade based on how confident
-the model's prediction was — more confidence, slightly larger position;
-less confidence, smaller position. Every trade automatically comes with a
-built-in stop-loss (to limit losses) and take-profit (to lock in gains).
+```python
+FEATURE_COLUMNS = [
+    "rsi",
+    "macd", "macd_signal", "macd_hist",
+    "bb_pct", "bb_width",
+    "atr_pct",
+    "returns_1d", "returns_5d",
+    "volume_change",
+]
+```
 
-**Step 5 — Running automatically.**
-The entire process above repeats on its own every weekday morning, hosted
-on a cloud server so it runs continuously without needing a computer to be
-turned on.
+On its historical test set, the model correctly predicted next-day direction **52.4%** of the time — modestly better than a coin flip. That's exactly why the risk-management layer below matters more than the raw prediction itself.
 
-## Key Features
+---
 
-| Feature | What it does |
-|---|---|
-| Machine learning predictions | Learns patterns from 2 years of historical price data instead of relying on fixed, hardcoded rules |
-| Technical indicators | RSI, MACD, Bollinger Bands, and ATR (volatility) — common tools traders use to read price charts |
-| Risk management | Position sizing, stop-loss/take-profit, volatility filtering, earnings blackout, news sentiment check |
-| Automated execution | Places trades automatically through Alpaca's paper trading API — no manual clicking required |
-| 24/7 cloud deployment | Runs on a schedule every trading day, hosted remotely rather than on a personal computer |
+## The Risk Gate — What Has to Be True Before Any Trade
+
+**Plain English:** A BUY signal alone isn't enough. Before the bot commits real (paper) dollars, three separate checks all have to pass:
+
+```
+Model says BUY (probability ≥ 60%)
+        ↓
+Is this stock's volatility (ATR%) between 0.5% and 8%?
+        → No  : skip — too flat or too wild to trust the signal
+        → Yes ↓
+Is an earnings announcement within the next 3 days?
+        → Yes : skip — earnings moves overwhelm the signal
+        → No  ↓
+Is recent news sentiment above -0.2?
+        → No  : skip — negative headlines override a technical BUY
+        → Yes : trade approved → size the position and submit the order
+```
+
+```python
+MAX_ATR_PCT = 0.08            # skip names more volatile than this
+MIN_ATR_PCT = 0.005           # skip names too flat to trust
+EARNINGS_BLACKOUT_DAYS = 3    # skip trading within N days of earnings
+MIN_SENTIMENT_SCORE = -0.2    # skip BUYs when headline sentiment is this negative
+```
+
+---
+
+## Position Sizing — How Much to Actually Bet
+
+**Plain English:** The bot never bets a fixed amount. It sizes every trade so that *if the stop-loss gets hit*, the loss is roughly 1% of the account — then scales that up or down based on how confident the model's prediction was. A 51% "coin-flip" signal gets a small position; an 85% high-conviction signal gets close to the full 5%-of-account cap.
+
+```python
+def calculate_position_size(account_equity, price, probability, stop_loss_pct):
+    conviction = min(abs(probability - 0.5) / 0.5, 1.0)      # 0 → 1
+    confidence_multiplier = 0.2 + 1.3 * conviction             # 0.2x → 1.5x
+
+    risk_dollars = account_equity * BASE_RISK_PCT * confidence_multiplier
+    position_value = risk_dollars / stop_loss_pct
+    position_value = min(position_value, account_equity * MAX_POSITION_PCT)
+
+    return int(position_value // price)
+```
+
+| Parameter | Value | Meaning |
+|---|---|---|
+| `BASE_RISK_PCT` | 1% | Target loss on a stopped-out trade, at minimum conviction |
+| `MAX_POSITION_PCT` | 5% | Hard cap — no single stock can exceed 5% of the account |
+| `STOP_LOSS_PCT` | 3% | Automatic exit if the price drops 3% from entry |
+| `TAKE_PROFIT_PCT` | 6% | Automatic exit if the price rises 6% from entry (2:1 reward-to-risk) |
+
+Every order that goes out is a bracket order — the entry, stop-loss, and take-profit are all submitted together, so exits are automatic and don't depend on the bot being awake to react.
+
+---
+
+## Watchlist
+
+The bot scans these 20 large-cap U.S. stocks every trading day:
+
+| | | | | |
+|---|---|---|---|---|
+| AAPL | MSFT | GOOGL | AMZN | NVDA |
+| META | TSLA | AMD | NFLX | JPM |
+| V | UNH | XOM | PG | HD |
+| DIS | BAC | KO | PEP | CSCO |
+
+---
 
 ## Tech Stack
 
-- **Python** — the language the entire project is built in
-- **XGBoost / scikit-learn** — the machine learning model
-- **Pandas / NumPy** — data processing
-- **Alpaca API** — brokerage connection for placing paper trades
-- **Railway** — cloud hosting for 24/7 automated execution
+- **Python** — core language for the entire pipeline
+- **XGBoost / scikit-learn** — the prediction model
+- **pandas / NumPy** — indicator math and feature engineering
+- **yfinance** — historical price and news data
+- **Alpaca Trade API** — automated paper trade execution
+- **VADER (vaderSentiment)** — headline sentiment scoring
+- **APScheduler** — daily cron-style scheduling
+- **Railway** — 24/7 cloud hosting
 - **Git / GitHub** — version control
 
-## Setup (For Anyone Who Wants to Run This)
+---
+
+## Live Status
+
+This bot is currently deployed and running on Railway's schedule. Since it only trades paper money and reports through Alpaca (not through this README), the real source of truth for open positions, trade history, and account value is the **[Alpaca paper trading dashboard](https://app.alpaca.markets/paper/dashboard/overview)** — not a number pasted here that could go stale.
+
+---
+
+## Project Structure
+
+```
+algo-trading-bot/
+├── config.py                thresholds, risk parameters, paths
+├── watchlist.py              the 20-stock universe
+├── data_pipeline/              price history + news headlines (yfinance)
+├── indicators/                   RSI / MACD / Bollinger / ATR, built from scratch
+├── model/                          feature engineering, training, prediction
+├── risk/                             position sizing, volatility/earnings filters, sentiment gate
+├── execution/                          Alpaca broker wrapper + trade executor
+├── run_bot.py                            one full daily run across the watchlist
+├── scheduler.py                            cron-style scheduler for 24/7 deployment
+├── train_model.py                          CLI to (re)train the model
+└── tests/                                    unit tests for the indicators
+```
+
+---
+
+## Running It Locally
 
 ```bash
-cd algo-trading-bot
+git clone https://github.com/sean-dawes/Quantitative-Trading-System.git
+cd Quantitative-Trading-System
+
 python3 -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
+
 pip install -r requirements.txt
-```
 
-Get free Alpaca **paper trading** API keys at
-https://app.alpaca.markets/paper/dashboard/overview, then:
-
-```bash
 cp .env.example .env
-# edit .env and paste in your ALPACA_API_KEY / ALPACA_SECRET_KEY
+# paste in your own Alpaca PAPER trading API keys
+
+python train_model.py           # train the model first
+python run_bot.py               # run one trading pass by hand
+python scheduler.py             # or run it automatically every weekday morning
 ```
 
-## Usage
-
-Train the prediction model (run this first):
-
-```bash
-python train_model.py
-```
-
-Run one trading check by hand:
-
-```bash
-python run_bot.py
-```
-
-Run it automatically every weekday morning:
-
-```bash
-python scheduler.py
-```
+---
 
 ## Disclaimer
 
-This is an educational project built for learning and portfolio purposes.
-It only trades Alpaca **paper** (practice) accounts, never real money.
-Nothing in this project is financial advice, and past or simulated
-performance does not predict future results.
+This is an educational project built for learning and portfolio purposes. It only trades Alpaca **paper** (practice) accounts, never real money. Nothing in this project is financial advice, and past or simulated performance does not predict future results.
